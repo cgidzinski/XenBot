@@ -1,42 +1,70 @@
 var config = require('./config.json');
+var actions = require('./actions.js');
+
+var DB = require('./models/models');
 var stringSimilarity = require('string-similarity');
 let trigger = "xenbot"
+let sourceUser = {}
 
-function isAdmin(msg) {
-    return config.admin.includes(msg.author.id)
+function initUser(message, callback) {
+    let discordID = message.author.id
+    let username = message.author.username
+    DB.User.findOne({ discordID: discordID }).exec(function(err, user) {
+        if (!user) {
+            var user = new DB.User()
+            user.discordID = discordID
+            user.username = username
+            user.save()
+            return callback(user)
+        } else {
+            user.username = username
+            user.save()
+            return callback(user)
+        }
+    })
 }
 
-function isBot(msg) {
-    return msg.author.bot
-}
 
-function getRole(message) {
-    return { 'admin': isAdmin(message), 'bot': isBot(message), 'name': message.author.username }
-}
+
+
+
 
 function message(msg) {
-    let strings = msg.content.trim().toLowerCase().split(" ")
-    let sim = stringSimilarity.findBestMatch(trigger, strings);
-    if (sim.bestMatch.rating >= 0.50) {
-        console.log("\n---------------------------------------------")
+    if (msg.author.bot) return
+    initUser(msg, (user) => {
+        sourceUser = user
+        let strings = msg.content.trim().toLowerCase().split(" ")
+        let sim = stringSimilarity.findBestMatch(trigger, strings);
+        if (sim.bestMatch.rating >= 0.50) {
+            console.log("\n---------------------------------------------")
+            console.log("COMMAND MATCHED [" + sim.bestMatch.rating + "]")
+            let cmd = strings.join(" ")
+            let filteredCmd = strings.filter(word => {
+                return word != sim.bestMatch.target
+            }).join(" ")
+            console.log("-- User: " + msg.author.username)
+            console.log("-- Command:", cmd)
+            matchList(msg, filteredCmd)
+            console.log("---------------------------------------------")
+        }
+    })
+}
 
-        console.log("COMMAND MATCHED [" + sim.bestMatch.rating + "]")
-        let user = getRole(msg)
-        let cmd = strings.join(" ")
-        let filteredCmd = strings.filter(word => {
-            return word != sim.bestMatch.target
-        }).join(" ")
-        console.log("-- User: " + user.name)
-        console.log("-- Admin:", user.admin)
-        console.log("-- Bot:", user.bot)
-        console.log("-- Command:", cmd)
-
-        matchList(msg, filteredCmd)
-        console.log("---------------------------------------------")
+function purematch(strings, cmd, message, min) {
+    let matchedCount = 0
+    for (var i = 0; i < strings.length; i++) {
+        if (cmd.includes(strings[i])) {
+            matchedCount += 1
+        }
+    }
+    if (matchedCount >= min) {
+        return true
+    } else {
+        return false
     }
 }
 
-function match(strings, cmd, message, callback) {
+function match(strings, cmd, message, min) {
     let sim = stringSimilarity.findBestMatch(cmd, strings);
     console.log("Comparing [" + cmd + "] to [" + strings + "]")
     console.log("Sim Match Percent: " + sim.bestMatch.target + " @ " + sim.bestMatch.rating)
@@ -46,35 +74,40 @@ function match(strings, cmd, message, callback) {
             matchedCount += 1
         }
     }
-    let matchedPercent = matchedCount / cmd.split(" ").length
-    console.log("Word Match Percent: " + matchedPercent)
-
-    if (sim.bestMatch.rating >= 0.50 || (sim.bestMatch.rating >= 0.30 && matchedPercent >= 0.30)) {
-        return callback(true)
+    if (sim.bestMatch.rating >= 0.70) {
+        return true
     }
+    return false
+}
 
-    return callback(false)
+
+function isAdmin(msg) {
+    return true
+
+    // if (sourceUser.admin === false) {
+    //     msg.reply("Must be an admin :(")
+    //     return false
+    // } else {
+    //     return true
+    // }
 }
 
 function matchList(msg, cmd) {
-    let didMatch = false
-    match(["hey", "hi", "hello", "sup", "konichiwa"], cmd, msg, (success => {
-        if (success) {
-            didMatch = true
-            return msg.reply("Hey there :)");
-        }
-    }))
-
-    match(["soob", "subaru", "subi"], cmd, msg, (success => {
-        if (success) {
-            didMatch = true
-
-            return msg.reply("Let me tell you something about the reliability of a Subaru automobile now the thing about Subarus is if you live in America okay friends if you live in America and you're looking to buy a Subaru and you're worried about your carbon footprint let me tell you about Subaru and there's zero landfill construction facility in what you would otherwise consider a flyover state is a state that they build all of the Subarus that are for sale in America and a zero landfill waste disposal facility if you were looking for a turbocharged four-cylinder horizontally-opposed boxer engine that will get you through the roughest terrains why that's that's a Subaru you could talk about jeeps you could talk about all kinds of other vehicles but the answer at the end of the day the thing that is going to get you through the roughest off-road conditions the thing that is going to get you through every yeah absolutely is the super the think it is gonna get you through the the toughest of terrain conditions the thing that is gonna get you through even just light snow as you're as you're on your typical way home your commute home from work why it's a Subaru a Subaru is gonna get you everywhere you need to go at a price performance ratio that can't be beat okay friends so Subaru is the way to go.");
-        }
-    }))
-    console.log("asd")
-    if (didMatch === false) return msg.reply('Im not sure what you said....');
+    if (purematch(["hey", "hi", "hello", "sup", "konichiwa"], cmd, msg, 1)) {
+        actions.hi(msg)
+    } else if (purematch(["soob", "subaru", "subi"], cmd, msg, 1)) {
+        actions.subaru(msg)
+    } else if (purematch(["open", "crack", "lootbox"], cmd, msg, 2)) {
+        actions.lootopen(msg)
+    } else if (purematch(["how", "many", "lootbox"], cmd, msg, 2)) {
+        actions.lootcheck(msg)
+    } else if (purematch(["give", "to", "lootbox"], cmd, msg, 2)) {
+        if (isAdmin(msg)) actions.lootgive(msg)
+    } else {
+        actions.none(msg)
+    }
 }
+
 
 module.exports = {
     message: message

@@ -6,6 +6,7 @@
   "author": "evg31337",
   "dependencies": {
     "discord.js": "^11.4.2",
+    "mongoose": "^5.2.15",
     "node-opus": "^0.3.0",
     "string-similarity": "^1.2.2"
   },

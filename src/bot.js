@@ -5,7 +5,7 @@ var utilities = require('./utilities.js');
 const client = new Discord.Client();
 
 client.on('ready', () => {
-    console.log(`Logged in as ${client.user.tag}`);
+    console.log(`Started Bot: ${client.user.tag}`);
 });
 
 client.on('message', msg => {
